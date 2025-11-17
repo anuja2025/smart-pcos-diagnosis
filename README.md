@@ -1,14 +1,56 @@
-# smart-pcos-diagnosis
-A demo Gradio app + training pipeline for a PCOS risk prediction system. Includes:
-- Training script (Random Forest & SVM)
-- Gradio app for interactive predictions and admin session reports
-- Heuristic risk calculator and recommendations
+# 🌸 Smart PCOS Prediction System  
+### AI + ML Powered Health Prediction using Random Forest & Gradio UI
+
+ 
+*A machine learning project designed to predict PCOS based on clinical factors and lifestyle parameters.*
+
+---
+
+## 🚀 Project Status  
 
 
-## Quickstart (local)
+---
+
+## 📌 Overview
+
+The **Smart PCOS Prediction System** is an AI/ML-based project that uses the **Random Forest Classifier** to analyze health parameters and determine the *risk level of PCOS* (Polycystic Ovary Syndrome).  
+A beautiful **Gradio interface** makes it easy to input data and visualize results.
+
+This project demonstrates:
+- ⭐ Applied Machine Learning (Classification)
+- ⭐ Medical data preprocessing
+- ⭐ User-friendly UI using Gradio
+- ⭐ Data visualization & accuracy evaluation
+
+---
+
+## 🖼️ Project Screenshots
+
+### 🔹 1. Gradio User Interface  
+<img width="2463" height="926" alt="image" src="https://github.com/user-attachments/assets/7b633db1-08be-4c84-a0ad-574e92033ea6" />
 
 
-1. Clone the repo
-```bash
-git clone https://github.com/<your-username>/smart-pcos-diagnosis.git
-cd smart-pcos-diagnosis
+### 🔹 2. Feature Input Form  
+![Form Screenshot](https://i.imgur.com/QfjT7Lm.png)
+
+### 🔹 3. Prediction Output  
+![Prediction Screenshot](https://i.imgur.com/EKxS5bD.png)
+
+
+
+---
+
+## ✨ Features
+
+✔ ML model trained on PCOS dataset  
+✔ Random Forest-based risk prediction  
+✔ Clean & modern Gradio UI  
+✔ Safe and easy input form  
+✔ Supports dataset preprocessing  
+✔ Generates prediction with confidence  
+✔ Accuracy, confusion matrix & visualizations included  
+
+---
+
+## 📂 Repository Structure
+
