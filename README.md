@@ -44,6 +44,7 @@ This project demonstrates:
 <img width="1997" height="768" alt="image" src="https://github.com/user-attachments/assets/ec6379df-d108-4b90-86ab-13fefd68cb53" />
 
 
+<img width="2004" height="563" alt="image" src="https://github.com/user-attachments/assets/ab2e7af6-8281-4a9a-9b0e-03d96b3dc741" />
 
 
 ---
@@ -61,4 +62,10 @@ This project demonstrates:
 ---
 
 ## 📂 Repository Structure
-
+smart-pcos-prediction/
+│
+├── app.py # Main ML + Gradio application
+├── requirements.txt # Python dependencies
+├── README.md # Project documentation
+└── dataset/
+└── Updated_PCOS_Dataset_with_Risk_Scores.xlsx # PCOS dataset
