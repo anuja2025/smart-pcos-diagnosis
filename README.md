@@ -51,15 +51,14 @@ This project demonstrates:
 
 ## ✨ Features
 
-✔ ML model trained on PCOS dataset  
-✔ Random Forest-based risk prediction  
-✔ Clean & modern Gradio UI  
-✔ Safe and easy input form  
-✔ Supports dataset preprocessing  
-✔ Generates prediction with confidence  
-✔ Accuracy, confusion matrix & visualizations included  
+✔ ML model trained on PCOS dataset
+✔ Random Forest & SVM–based risk prediction
+✔ Clean & modern Gradio UI
+✔ Safe and easy input form
+✔ Supports dataset preprocessing
+✔ Generates prediction with confidence
+✔ Accuracy, confusion matrix & visualizations included
 
----
 
 ## 📂 Repository Structure
 smart-pcos-prediction/
