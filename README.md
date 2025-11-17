@@ -9,13 +9,9 @@
 ## 🚀 Project Status  
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
-![License](https://img.shields.io/badge/License-MIT-purple)
 ![Dataset](https://img.shields.io/badge/Dataset-Excel-yellow)
 ![Framework](https://img.shields.io/badge/Framework-Gradio-orange)
 
-
-
----
 
 ## 📌 Overview
 
