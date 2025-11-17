@@ -47,13 +47,12 @@ This project demonstrates:
 
 ## ✨ Features
 
-✔ ML model trained on PCOS dataset
-✔ Random Forest & SVM–based risk prediction
-✔ Clean & modern Gradio UI
-✔ Safe and easy input form
-✔ Supports dataset preprocessing
-✔ Generates prediction with confidence
-✔ Accuracy, confusion matrix & visualizations included
+✔ Machine Learning model trained on curated PCOS dataset  
+✔ Uses **Random Forest** and **SVM** for dual-model prediction  
+✔ Clean & modern Gradio web UI  
+✔ Accuracy + confidence score displayed  
+✔ Safe, simple, and user-friendly interface  
+✔ Preprocessing, training, and prediction included  
 
 
 ## 📂 Repository Structure
