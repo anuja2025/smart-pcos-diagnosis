@@ -7,6 +7,12 @@
 ---
 
 ## 🚀 Project Status  
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+![License](https://img.shields.io/badge/License-MIT-purple)
+![Dataset](https://img.shields.io/badge/Dataset-Excel-yellow)
+![Framework](https://img.shields.io/badge/Framework-Gradio-orange)
+
 
 
 ---
@@ -31,10 +37,12 @@ This project demonstrates:
 
 
 ### 🔹 2. Feature Input Form  
-![Form Screenshot](https://i.imgur.com/QfjT7Lm.png)
+<img width="2456" height="1026" alt="image" src="https://github.com/user-attachments/assets/cc4748a2-1da8-473b-9bb5-d513ba25689f" />
+
 
 ### 🔹 3. Prediction Output  
-![Prediction Screenshot](https://i.imgur.com/EKxS5bD.png)
+<img width="1997" height="768" alt="image" src="https://github.com/user-attachments/assets/ec6379df-d108-4b90-86ab-13fefd68cb53" />
+
 
 
 
