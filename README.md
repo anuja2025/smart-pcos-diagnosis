@@ -15,7 +15,11 @@
 
 ## 📌 Overview
 
-The **Smart PCOS Prediction System** is an AI/ML-based project that uses the **Random Forest Classifier** to analyze health parameters and determine the *risk level of PCOS* (Polycystic Ovary Syndrome).  
+The **Smart PCOS Prediction System** is an AI/ML-based project that uses the   
+  • Logistic Regression
+  • Support Vector Machine (SVM)
+  • Random Forest Classifier
+  • XGBoost Classifier to analyze health parameters and determine the *risk level of PCOS* (Polycystic Ovary Syndrome).  
 A beautiful **Gradio interface** makes it easy to input data and visualize results.
 
 This project demonstrates:
