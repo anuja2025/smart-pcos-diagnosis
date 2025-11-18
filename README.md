@@ -41,19 +41,30 @@ This project demonstrates:
 
 
 <img width="2004" height="563" alt="image" src="https://github.com/user-attachments/assets/ab2e7af6-8281-4a9a-9b0e-03d96b3dc741" />
+<img width="1005" height="597" alt="image" src="https://github.com/user-attachments/assets/5b0c11ad-355c-4c77-9794-8a9f14f57121" />
+<img width="1835" height="792" alt="image" src="https://github.com/user-attachments/assets/145b7eba-02d9-4a24-a768-1fd45606e560" />
+<img width="1936" height="492" alt="image" src="https://github.com/user-attachments/assets/6dafc870-7119-494e-9076-8596338ecc81" />
 
 
 ---
 
 ## ✨ Features
 
-✔ Machine Learning model trained on curated PCOS dataset  
-✔ Uses **Random Forest** and **SVM** for dual-model prediction  
-✔ Clean & modern Gradio web UI  
-✔ Accuracy + confidence score displayed  
-✔ Safe, simple, and user-friendly interface  
-✔ Preprocessing, training, and prediction included  
+🚀 Key Features of Our PCOS Risk Prediction System
 
+✔ Machine Learning model trained on a customized PCOS dataset (clinical + lifestyle features)
+✔ Implementation of four AI/ML models for performance comparison:
+  • Logistic Regression
+  • Support Vector Machine (SVM)
+  • Random Forest Classifier
+  • XGBoost Classifier
+✔ Best-performing model selected for final diagnosis
+✔ Hybrid approach → Model prediction + Rule-based risk scoring for explainable output
+✔ Displays accuracy, probability score & medical reasoning behind decisions
+✔ Fully functional Gradio Web Interface for user-friendly screening
+✔ End-to-end pipeline: Data preprocessing → Training → Evaluation → Deployment
+✔ Lightweight, cost-effective tool for early PCOS detection & awareness
+✔ Useful for healthcare professionals & self-assessment by women
 
 ## 📂 Repository Structure
 smart-pcos-prediction/
