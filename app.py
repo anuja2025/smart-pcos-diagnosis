@@ -1,7 +1,12 @@
-# --- 0) Install dependencies ---
+# --- Install dependencies (Colab) ---
 !pip install -q gradio openpyxl seaborn joblib
+# Try to install xgboost, if environment allows
+try:
+    get_ipython().system_raw("pip install -q xgboost")
+except:
+    pass
 
-# --- 1) Imports ---
+# --- Imports ---
 import os, time
 import pandas as pd
 import numpy as np
@@ -12,13 +17,23 @@ import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, roc_auc_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, roc_auc_score, precision_score, recall_score, f1_score
 
 import gradio as gr
 
 sns.set(style="whitegrid")
+
+# --- XGBoost import with fallback ---
+USE_XGBOOST = False
+try:
+    from xgboost import XGBClassifier
+    USE_XGBOOST = True
+except Exception as e:
+    print("xgboost not available - will use GradientBoostingClassifier as fallback for boosting.", e)
+    XGBClassifier = None
 
 # --- 2) Upload dataset (used for training) ---
 print("Upload your Excel dataset: Updated_PCOS_Dataset_with_Risk_Scores.xlsx")
@@ -72,69 +87,196 @@ X = pd.DataFrame(df_proc[INPUT_FEATURES], columns=INPUT_FEATURES)
 y = df_proc[TARGET].astype(int)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42, stratify=y)
 
-# --- 6) Scale for SVM ---
+# --- 6) Scale for SVM & Logistic Regression ---
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# --- 7) Train Random Forest & SVM ---
-print("Training RandomForest and SVM (this may take a moment)...")
+# --- 7) Train Random Forest, SVM, Logistic Regression, XGBoost/GBM ---
+print("Training models (RF, SVM, Logistic, XGBoost/GBM) - this may take a moment...")
+
+models = {}
+metrics = {}
+
+# Random Forest (uses raw X)
 t0 = time.time()
 rf = RandomForestClassifier(n_estimators=150, random_state=42)
 rf.fit(X_train, y_train)
 rf_time = time.time() - t0
-rf_pred = rf.predict(X_test)
-rf_acc = accuracy_score(y_test, rf_pred) * 100.0
+models['Random Forest'] = rf
 
+# SVM (uses scaled X)
 t0 = time.time()
 svm = SVC(kernel='rbf', probability=True, random_state=42)
 svm.fit(X_train_scaled, y_train)
 svm_time = time.time() - t0
-svm_pred = svm.predict(X_test_scaled)
-svm_acc = accuracy_score(y_test, svm_pred) * 100.0
+models['SVM'] = svm
 
-print(f"RF acc: {rf_acc:.2f}%  time: {rf_time:.2f}s")
-print(f"SVM acc: {svm_acc:.2f}% time: {svm_time:.2f}s")
+# Logistic Regression (uses scaled X)
+t0 = time.time()
+lr = LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42)
+lr.fit(X_train_scaled, y_train)
+lr_time = time.time() - t0
+models['Logistic Regression'] = lr
 
-# --- 8) Metrics & plots ---
-cm_rf = confusion_matrix(y_test, rf_pred)
-cm_svm = confusion_matrix(y_test, svm_pred)
-rf_proba = rf.predict_proba(X_test)[:,1]
-svm_proba = svm.predict_proba(X_test_scaled)[:,1]
-rf_fpr, rf_tpr, _ = roc_curve(y_test, rf_proba)
-svm_fpr, svm_tpr, _ = roc_curve(y_test, svm_proba)
-rf_auc = roc_auc_score(y_test, rf_proba)
-svm_auc = roc_auc_score(y_test, svm_proba)
+# XGBoost or fallback GradientBoosting
+t0 = time.time()
+if USE_XGBOOST:
+    xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42, verbosity=0)
+    xgb.fit(X_train, y_train)
+    boost_time = time.time() - t0
+    models['XGBoost'] = xgb
+else:
+    gb = GradientBoostingClassifier(n_estimators=150, random_state=42)
+    gb.fit(X_train, y_train)
+    boost_time = time.time() - t0
+    models['Gradient Boosting (fallback)'] = gb
 
+# --- 8) Evaluate all models on X_test ---
+def get_preds_and_metrics(name, model):
+    # Choose scaled/unscaled appropriately
+    if name in ['SVM', 'Logistic Regression']:
+        X_eval = X_test_scaled
+    else:
+        X_eval = X_test
+    preds = model.predict(X_eval)
+    # Some models might not have predict_proba; handle gracefully using decision_function if exists
+    proba = None
+    try:
+        proba = model.predict_proba(X_eval)[:,1]
+    except:
+        try:
+            df_score = model.decision_function(X_eval)
+            proba = (df_score - df_score.min()) / (df_score.max() - df_score.min() + 1e-9)
+        except:
+            proba = np.zeros_like(preds, dtype=float)
+    acc = accuracy_score(y_test, preds)
+    prec = precision_score(y_test, preds, zero_division=0)
+    rec = recall_score(y_test, preds, zero_division=0)
+    f1 = f1_score(y_test, preds, zero_division=0)
+    auc = roc_auc_score(y_test, proba) if (proba is not None and len(np.unique(proba))>1) else 0.0
+    cm = confusion_matrix(y_test, preds)
+    return {'preds': preds, 'proba': proba, 'accuracy': acc, 'precision': prec, 'recall': rec, 'f1': f1, 'auc': auc, 'cm': cm}
+
+# gather times
+times = {
+    'Random Forest': rf_time,
+    'SVM': svm_time,
+    'Logistic Regression': lr_time
+}
+if USE_XGBOOST:
+    times['XGBoost'] = boost_time
+else:
+    times['Gradient Boosting (fallback)'] = boost_time
+
+# Evaluate
+eval_results = {}
+for name, model in models.items():
+    eval_results[name] = get_preds_and_metrics(name, model)
+
+# Compute accuracy percentages for quick printing
+for name, res in eval_results.items():
+    print(f"{name} - Acc: {res['accuracy']*100:.2f}%, AUC: {res['auc']:.3f}, Time: {times.get(name, 0):.2f}s")
+
+# --- 9) Figures: confusion matrices, ROC, feature importance, accuracy/time bar charts ---
 def make_confusion_figure():
-    fig, axes = plt.subplots(1,2, figsize=(10,4))
-    sns.heatmap(cm_rf, annot=True, fmt='d', ax=axes[0], cmap='Blues', cbar=False)
-    axes[0].set_title(f"Random Forest (acc={rf_acc:.2f}%)"); axes[0].set_xlabel("Predicted"); axes[0].set_ylabel("Actual")
-    sns.heatmap(cm_svm, annot=True, fmt='d', ax=axes[1], cmap='Greens', cbar=False)
-    axes[1].set_title(f"SVM (acc={svm_acc:.2f}%)"); axes[1].set_xlabel("Predicted"); axes[1].set_ylabel("Actual")
+    n = len(eval_results)
+    cols = 2
+    rows = (n + 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(6*cols, 4*rows))
+    axes = np.array(axes).reshape(-1)
+    for ax_idx, (name, res) in enumerate(eval_results.items()):
+        cm = res['cm']
+        ax = axes[ax_idx]
+        sns.heatmap(cm, annot=True, fmt='d', ax=ax, cmap='Blues', cbar=False)
+        acc_pct = res['accuracy']*100
+        ax.set_title(f"{name} (acc={acc_pct:.2f}%)")
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual")
+    # hide any extra axes
+    for i in range(len(eval_results), len(axes)):
+        axes[i].axis('off')
     plt.tight_layout()
     return fig
 
 def make_roc_figure():
-    fig, ax = plt.subplots(figsize=(6,5))
-    ax.plot(rf_fpr, rf_tpr, label=f"Random Forest (AUC={rf_auc:.3f})")
-    ax.plot(svm_fpr, svm_tpr, label=f"SVM (AUC={svm_auc:.3f})")
+    fig, ax = plt.subplots(figsize=(7,6))
+    for name, res in eval_results.items():
+        proba = res['proba']
+        if proba is None or len(np.unique(proba)) <= 1:
+            continue
+        fpr, tpr, _ = roc_curve(y_test, proba)
+        auc = res['auc']
+        ax.plot(fpr, tpr, label=f"{name} (AUC={auc:.3f})")
     ax.plot([0,1],[0,1],'k--', linewidth=0.8)
-    ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate"); ax.set_title("ROC Curve Comparison")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("ROC Curve Comparison")
     ax.legend()
     plt.tight_layout()
     return fig
 
 def make_feature_imp_figure(top_n=12):
-    importances = rf.feature_importances_
-    feat_imp = pd.Series(importances, index=INPUT_FEATURES).sort_values(ascending=False)[:top_n]
-    fig, ax = plt.subplots(figsize=(7,5))
-    sns.barplot(x=feat_imp.values, y=feat_imp.index, ax=ax, palette="mako")
-    ax.set_title("Top Feature Importances (RF)")
+    # Use Random Forest feature importances (if present)
+    if hasattr(rf, "feature_importances_"):
+        importances = rf.feature_importances_
+        feat_imp = pd.Series(importances, index=INPUT_FEATURES).sort_values(ascending=False)[:top_n]
+        fig, ax = plt.subplots(figsize=(7,5))
+        sns.barplot(x=feat_imp.values, y=feat_imp.index, ax=ax)
+        ax.set_title("Top Feature Importances (RF)")
+        plt.tight_layout()
+        return fig
+    else:
+        fig, ax = plt.subplots(figsize=(5,3))
+        ax.text(0.5,0.5,"No feature importances available", ha='center')
+        ax.axis('off')
+        return fig
+
+def make_accuracy_bar_figure():
+    names = []
+    accs = []
+    for name, r in eval_results.items():
+        names.append(name)
+        accs.append(r['accuracy']*100)
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.bar(names, accs)
+    ax.set_ylabel("Accuracy (%)")
+    ax.set_title("Model Accuracy Comparison")
+    plt.xticks(rotation=20, ha='right')
     plt.tight_layout()
     return fig
 
-# --- 9) Heuristic risk & recommendations ---
+def make_time_bar_figure():
+    names = []
+    tms = []
+    for name in eval_results.keys():
+        names.append(name)
+        tms.append(times.get(name, 0))
+    fig, ax = plt.subplots(figsize=(7,4))
+    ax.bar(names, tms)
+    ax.set_ylabel("Training Time (s)")
+    ax.set_title("Model Training Time Comparison")
+    plt.xticks(rotation=20, ha='right')
+    plt.tight_layout()
+    return fig
+
+def make_metrics_table_df():
+    rows = []
+    for name, r in eval_results.items():
+        rows.append({
+            "Model": name,
+            "Accuracy(%)": round(r['accuracy']*100, 2),
+            "AUC": round(r['auc'], 3),
+            "Precision": round(r['precision'], 3),
+            "Recall": round(r['recall'], 3),
+            "F1": round(r['f1'], 3),
+            "Train_Time_s": round(times.get(name, 0), 2)
+        })
+    return pd.DataFrame(rows).sort_values(by="Accuracy(%)", ascending=False).reset_index(drop=True)
+
+metrics_df = make_metrics_table_df()
+
+# --- 9.5) Heuristic risk & recommendations (kept as-is) ---
 def calculate_bmi_value(weight, height):
     try: return weight / (height/100)**2
     except: return 0.0
@@ -154,24 +296,24 @@ def assess_risk_percentage(bmi, irregular_periods, facial_hair, acne, hair_loss,
     elif bmi <= 24.9: risk_percentage += 10; risk_details.append("BMI: Optimal - +10%")
     elif bmi <= 29.9: risk_percentage += 30; risk_details.append("BMI: Overweight - +30%")
     else: risk_percentage += 50; risk_details.append("BMI: Obese - +50%")
-    
+
     symptoms_vals = [facial_hair, acne, hair_loss, irregular_periods]
     symptom_risk = 10 * sum([int(v) for v in symptoms_vals])
     risk_percentage += symptom_risk
     for i, name in enumerate(["Facial Hair","Acne","Hair Loss","Irregular Periods"]):
         if symptoms_vals[i] == 1:
             risk_details.append(f"Symptom: {name} - +10%")
-    
+
     if str(physical_activity).lower() == "sedentary": risk_percentage += 20; risk_details.append("Physical Activity: Sedentary - +20%")
     elif str(physical_activity).lower() == "moderate": risk_percentage += 10; risk_details.append("Physical Activity: Moderate - +10%")
-    
+
     if diet in ["Processed","High Fat"]: risk_percentage += 15; risk_details.append("Diet: Processed/High Fat - +15%")
     if str(stress).lower() == "high": risk_percentage += 15; risk_details.append("Stress: High - +15%")
     elif str(stress).lower() == "moderate": risk_percentage += 10; risk_details.append("Stress: Moderate - +10%")
-    
+
     if float(water) < 2: risk_percentage += 10; risk_details.append("Water Intake: Low - +10%")
     elif float(water) >= 3: risk_percentage -= 5; risk_details.append("Water Intake: High - -5%")
-    
+
     risk_percentage = int(min(max(risk_percentage, 0), 100))
     return risk_percentage, risk_details
 
@@ -230,17 +372,12 @@ def prepare_input_row(age, weight, height, cycle_len, irreg, facial, acne, hair_
 USER_CREDENTIALS = {"user":"pass123","admin":"admin123"}
 
 def login_handler(username, password, current_user_state, reports_state):
-    """Single login screen logic. Returns visibility updates and states plus admin table."""
-    # default: show login
     if USER_CREDENTIALS.get(username) == password:
-        # set current user
         if username == "admin":
-            # admin: show form_section and admin panel and provide reports table
             reports_df = pd.DataFrame(reports_state) if reports_state else pd.DataFrame()
             return (gr.update(visible=False), gr.update(visible=True), gr.update(visible=True),
                     f"✅ Welcome, {username}!", username, reports_state, reports_df)
         else:
-            # normal user: show form_section but hide admin panel
             return (gr.update(visible=False), gr.update(visible=True), gr.update(visible=False),
                     f"✅ Welcome, {username}!", username, reports_state, pd.DataFrame())
     else:
@@ -248,7 +385,6 @@ def login_handler(username, password, current_user_state, reports_state):
                 "❌ Invalid login credentials.", "", reports_state, pd.DataFrame())
 
 def logout_handler(current_reports_state):
-    """Return UI visibility to login screen and keep reports_state intact."""
     return (gr.update(visible=True), gr.update(visible=False), gr.update(visible=False),
             "You have logged out.", "", current_reports_state, pd.DataFrame())
 
@@ -258,13 +394,26 @@ def ui_predict_and_report(age, weight, height, cycle_len, irreg, facial, acne, h
     input_df, input_scaled = prepare_input_row(age, weight, height, cycle_len, irreg, facial, acne, hair_loss,
                                                mood, sleep, act_level, act_time, diet, stress, water)
 
-    # Model prediction
-    if model_choice == "Random Forest":
+    # Model prediction & prob
+    chosen_model = model_choice
+    if chosen_model == "Random Forest":
         pred = int(rf.predict(input_df)[0])
         prob = float(rf.predict_proba(input_df)[0][1] * 100)
-    else:
+    elif chosen_model == "SVM":
         pred = int(svm.predict(input_scaled)[0])
         prob = float(svm.predict_proba(input_scaled)[0][1] * 100)
+    elif chosen_model == "Logistic Regression":
+        pred = int(lr.predict(input_scaled)[0])
+        prob = float(lr.predict_proba(input_scaled)[0][1] * 100)
+    elif chosen_model in ["XGBoost", "Gradient Boosting (fallback)"]:
+        # If xgboost used, key in models is 'XGBoost', else fallback name
+        model_key = "XGBoost" if USE_XGBOOST else "Gradient Boosting (fallback)"
+        model_obj = models[model_key] if model_key in models else (xgb if USE_XGBOOST else gb)
+        pred = int(model_obj.predict(input_df)[0])
+        try:
+            prob = float(model_obj.predict_proba(input_df)[0][1] * 100)
+        except:
+            prob = float(0.0)
 
     # Heuristic risk
     bmi_val = float(input_df.loc[0,'BMI'])
@@ -272,7 +421,7 @@ def ui_predict_and_report(age, weight, height, cycle_len, irreg, facial, acne, h
         bmi_val, yn(irreg), yn(facial), yn(acne), yn(hair_loss), act_level, diet, stress, float(water)
     )
 
-    # Final assessment
+    # Final assessment logic (keeps original heuristic + model)
     if pred == 1 or heuristic_score >= 60:
         final_assessment = "High Risk"
     elif heuristic_score >= 40 or prob >= 50:
@@ -303,7 +452,7 @@ def ui_predict_and_report(age, weight, height, cycle_len, irreg, facial, acne, h
         f"Final assessment: {final_assessment}\n\n"
         f"Risk breakdown:\n" + ("\n".join(heuristic_details) if heuristic_details else "-") + "\n\n"
         f"Recommendations:\n" + ("\n".join(recs) if recs else "-") + "\n\n"
-        f"Model metrics: RF acc={rf_acc:.2f}%, SVM acc={svm_acc:.2f}%"
+        f"Model metrics summary:\n" + metrics_df.to_string(index=False)
     )
 
     # Save report to in-memory session list (reports_state)
@@ -331,8 +480,16 @@ def ui_predict_and_report(age, weight, height, cycle_len, irreg, facial, acne, h
     # If admin is viewing, send the dataframe for display; otherwise empty DataFrame
     reports_df = pd.DataFrame(reports_state) if current_user == "admin" else pd.DataFrame()
 
-    # Return: report text, figures, feature-imp fig, reports_df (for admin), updated reports_state
-    return report_text, make_confusion_figure(), make_roc_figure(), make_feature_imp_figure(), reports_df, reports_state
+    # Return: report text, figures, feature-imp fig, metrics table, accuracy & time bars, reports_df, updated reports_state
+    return (report_text,
+            make_confusion_figure(),
+            make_roc_figure(),
+            make_feature_imp_figure(),
+            make_accuracy_bar_figure(),
+            make_time_bar_figure(),
+            metrics_df,
+            reports_df,
+            reports_state)
 
 # --- 13) Gradio UI (single login screen, immediate admin dashboard on login) ---
 css = """
@@ -341,9 +498,8 @@ body { background: linear-gradient(135deg,#fff5fb,#f4fbff); }
 """
 
 with gr.Blocks(theme=gr.themes.Soft(primary_hue="violet"), css=css) as demo:
-    gr.Markdown("<h1 style='text-align:center;color:#8b2aa6'>💜 Smart PCOS Diagnosis System</h1>")
+    gr.Markdown("<h1 style='text-align:center;color:#8b2aa6'>💜 Smart PCOS Diagnosis System (Upgraded)</h1>")
 
-    # States: current_user and reports_state (in-memory list)
     current_user = gr.State("")          # stores username string after login
     reports_state = gr.State([])         # stores list of report dicts (in-memory)
 
@@ -358,7 +514,6 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="violet"), css=css) as demo:
 
     # Form section (visible after login)
     with gr.Column(visible=False) as form_section:
-        # top-row: show current user + logout button
         with gr.Row():
             user_label = gr.Markdown(value="")   # will be updated with current user info
             logout_btn = gr.Button("Logout")
@@ -389,13 +544,25 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="violet"), css=css) as demo:
                         stress_choices = list(label_encoders['Stress_level'].classes_) if 'Stress_level' in label_encoders else ["Low","Moderate","High"]
                         stress = gr.Dropdown(stress_choices, label="Stress Level", value=stress_choices[0])
                         water = gr.Slider(minimum=0, maximum=5, step=0.1, label="Water Intake (L/day)", value=2.0)
-                model_choice = gr.Dropdown(["Random Forest","SVM"], label="Choose Model", value="Random Forest")
+
+                # Model dropdown includes fallback name if xgboost unavailable
+                model_options = ["Random Forest","SVM","Logistic Regression"]
+                if USE_XGBOOST:
+                    model_options.append("XGBoost")
+                else:
+                    model_options.append("Gradient Boosting (fallback)")
+                model_choice = gr.Dropdown(model_options, label="Choose Model", value="Random Forest")
+
                 submit_btn = gr.Button("Generate Report")
                 result_box = gr.Textbox(label="Assessment & Recommendations", lines=12)
                 with gr.Row():
                     cm_fig = gr.Plot(label="Confusion Matrices")
                     roc_fig = gr.Plot(label="ROC Comparison")
+                with gr.Row():
                     fi_fig = gr.Plot(label="Feature Importance")
+                    acc_fig = gr.Plot(label="Accuracy Comparison")
+                time_fig = gr.Plot(label="Training Time Comparison")
+                metrics_table = gr.Dataframe(value=metrics_df, interactive=False, label="Model Metrics (Accuracy, AUC, Precision, Recall, F1, Train time)")
 
             # Admin panel tab (visible only for admin)
             with gr.TabItem("Admin Panel") as admin_tab:
@@ -403,7 +570,7 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="violet"), css=css) as demo:
                 reports_table = gr.Dataframe(value=pd.DataFrame(), interactive=False, label="Session Reports")
                 clear_btn = gr.Button("Clear Session Reports (admin only)")
 
-    # Hook up login button: set visibility, current_user, and fill admin table immediately
+    # Hook up login
     login_btn.click(fn=login_handler,
                     inputs=[username, password, current_user, reports_state],
                     outputs=[login_section, form_section, admin_tab, login_msg, current_user, reports_state, reports_table])
@@ -415,14 +582,14 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="violet"), css=css) as demo:
         return f"**Logged in as:** `{user}`"
     current_user.change(fn=make_user_label, inputs=[current_user], outputs=[user_label])
 
-    # Hook up logout: bring back login screen, keep reports_state intact and clear admin table view
+    # Hook up logout
     logout_btn.click(fn=logout_handler, inputs=[reports_state], outputs=[login_section, form_section, admin_tab, login_msg, current_user, reports_state, reports_table])
 
     # Submit button click: generate report and append to session list; update admin table if admin
     submit_btn.click(fn=ui_predict_and_report,
                      inputs=[age, weight, height, cycle_len, irreg, facial, acne, hair_loss,
                              mood, sleep, act_level, act_time, diet, stress, water, model_choice, current_user, reports_state],
-                     outputs=[result_box, cm_fig, roc_fig, fi_fig, reports_table, reports_state])
+                     outputs=[result_box, cm_fig, roc_fig, fi_fig, acc_fig, time_fig, metrics_table, reports_table, reports_state])
 
     # Admin clear session reports (admin only)
     def clear_reports(current_user, reports_state):
